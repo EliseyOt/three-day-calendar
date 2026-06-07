@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Дневник</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f4f0; --bg3: #eceae2;
+    --text: #1a1a18; --text2: #7a7870;
+    --border: rgba(0,0,0,0.11); --border2: rgba(0,0,0,0.2);
+    --accent: #c0421a; --accent-bg: #faece7; --accent-text: #8c2e10;
+    --green: #2e7d52; --green-bg: #eaf3e8;
+  }
+  body.dark {
+    --bg: #191917; --bg2: #232320; --bg3: #2d2d29;
+    --text: #edeae0; --text2: #918f86;
+    --border: rgba(255,255,255,0.09); --border2: rgba(255,255,255,0.18);
+    --accent: #e0602e; --accent-bg: #3a1e0f; --accent-text: #f09070;
+    --green: #4caf74; --green-bg: #172e20;
+  }
+  html { background: var(--bg); height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 16px; line-height: 1.5;
+    -webkit-tap-highlight-color: transparent; min-height: 100%;
+  }
+  #app { max-width: 440px; margin: 0 auto; min-height: 100vh; background: var(--bg); padding-bottom: 90px; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50; background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-name { font-size: 14px; letter-spacing: 0.12em; color: var(--text2); text-transform: lowercase; }
+  .topbar-right { display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 0.5px solid var(--border2); background: var(--bg2);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--text2); transition: background 0.15s; -webkit-appearance: none;
+  }
+  .icon-btn:hover { background: var(--bg3); }
+  .auth-badge {
+    font-size: 11px; padding: 4px 10px; border-radius: 12px;
+    border: 0.5px solid var(--border2); background: var(--bg2);
+    color: var(--text2); cursor: pointer; letter-spacing: 0.03em;
+  }
+  .auth-badge.connected { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+  .auth-badge.loading { opacity: 0.6; }
+
+  .year-marker { padding: 28px 16px 8px; display: flex; align-items: center; gap: 14px; }
+  .year-number { font-size: 42px; font-weight: normal; letter-spacing: -0.04em; color: var(--text2); opacity: 0.35; flex-shrink: 0; }
+  .year-line { flex: 1; height: 0.5px; background: var(--border2); opacity: 0.5; }
+
+  .month-block { padding: 16px 16px 4px; }
+  .month-name { font-size: 28px; font-weight: normal; letter-spacing: -0.03em; color: var(--text); margin-bottom: 12px; }
+
+  .week-row { margin-bottom: 6px; }
+  .week-head { display: flex; align-items: center; gap: 8px; min-height: 46px; }
+  .chips { display: flex; gap: 5px; flex-shrink: 0; }
+  .chip {
+    width: 38px; height: 38px; border-radius: 10px;
+    border: 1px solid var(--border2); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: var(--text); user-select: none;
+  }
+  .chip.today { border: 2px solid var(--accent); color: var(--accent); font-weight: bold; }
+  .chip.past  { color: var(--text2); border-color: var(--border); }
+
+  .week-right { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .preview {
+    flex: 1; min-width: 0; height: 34px; border-radius: 17px;
+    border: 0.5px solid var(--border2); background: var(--bg2);
+    padding: 0 14px; font-size: 13px; color: var(--text2);
+    font-family: inherit; font-style: italic;
+    display: flex; align-items: center;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+  }
+  .preview.filled { color: var(--text); font-style: normal; }
+  .toggle {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    border: 0.5px solid var(--border2); background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--text2); transition: transform 0.22s ease, background 0.15s;
+  }
+  .toggle.open { transform: rotate(180deg); }
+  .toggle:hover { background: var(--bg2); }
+
+  .week-body { padding: 8px 0 12px; display: flex; flex-direction: column; gap: 8px; animation: fadeSlide 0.18s ease; }
+  @keyframes fadeSlide { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .note-field {
+    width: 100%; min-height: 84px;
+    border: 0.5px solid var(--border2); border-radius: 10px;
+    background: var(--bg); padding: 10px 14px;
+    font-size: 14px; color: var(--text); font-family: inherit;
+    line-height: 1.65; resize: none; outline: none; transition: border-color 0.15s;
+  }
+  .note-field::placeholder { color: var(--text2); font-style: italic; }
+  .note-field:focus { border-color: var(--accent); }
+
+  .month-divider { border: none; border-top: 0.5px solid var(--border); margin: 16px 16px 0; }
+  .sentinel { height: 40px; }
+
+  .bottombar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 440px; background: var(--bg);
+    border-top: 0.5px solid var(--border); padding: 10px 16px 16px;
+    display: flex; gap: 8px; align-items: center; z-index: 50;
+  }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background 0.3s; }
+  .sync-dot.ok   { background: var(--green); }
+  .sync-dot.err  { background: var(--accent); }
+  .sync-dot.spin { background: var(--accent); animation: pulse 0.8s infinite alternate; }
+  @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+  .bar-btn {
+    flex: 1; height: 40px; border-radius: 20px;
+    border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text);
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px; transition: background 0.15s;
+  }
+  .bar-btn:hover { background: var(--bg3); }
+  .bar-btn:disabled { opacity: 0.45; cursor: default; }
+  .bar-btn.primary { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent); }
+  .bar-btn.primary:hover { opacity: 0.85; background: var(--accent-bg); }
+
+  .toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    padding: 9px 20px; border-radius: 20px; font-size: 13px; font-family: inherit;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s; z-index: 200; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.show { opacity: 1; pointer-events: all; }
+  .modal {
+    width: 100%; max-width: 440px; background: var(--bg);
+    border-radius: 18px 18px 0 0; padding: 20px 20px 36px;
+    transform: translateY(100%); transition: transform 0.25s ease;
+  }
+  .modal-overlay.show .modal { transform: translateY(0); }
+  .modal h2 { font-size: 18px; font-weight: normal; margin-bottom: 6px; }
+  .modal p { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
+  .modal input {
+    width: 100%; height: 42px; border-radius: 8px;
+    border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text);
+    padding: 0 14px; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 10px;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 8px; }
+  .modal-btn {
+    flex: 1; height: 42px; border-radius: 21px;
+    border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text);
+    font-size: 14px; font-family: inherit; cursor: pointer;
+  }
+  .modal-btn.ok { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <span class="app-name">дневник</span>
+    <div class="topbar-right">
+      <span class="auth-badge" id="authBadge" onclick="handleAuthClick()">…</span>
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема">☀</button>
+    </div>
+  </div>
+  <div id="calendar"></div>
+  <div class="sentinel" id="sentinelBottom"></div>
+  <div class="bottombar">
+    <div class="sync-dot" id="syncDot"></div>
+    <button class="bar-btn" id="loadBtn" onclick="loadFromDrive()">↓ Загрузить</button>
+    <button class="bar-btn primary" id="saveBtn" onclick="saveToDrive()">↑ Сохранить</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="clientModal">
+  <div class="modal">
+    <h2>Google Client ID</h2>
+    <p>Вставь Client ID из Google Cloud Console → Clients → твой OAuth client.</p>
+    <input type="text" id="clientIdInput" placeholder="xxxx.apps.googleusercontent.com">
+    <div class="modal-btns">
+      <button class="modal-btn" onclick="closeModal()">Отмена</button>
+      <button class="modal-btn ok" onclick="saveClientId()">Войти</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const FILE_NAME = 'calendar_journal.json';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+const today = new Date();
+const todayY = today.getFullYear(), todayM = today.getMonth(), todayD = today.getDate();
+const todayKey = `${todayY}-${todayM}-${todayD}`;
+
+let notes = {}, openWeeks = {};
+let accessToken = null, tokenClient = null;
+let clientId = localStorage.getItem('gClientId') || '';
+let isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+let rangeStart, rangeEnd;
+
+function normalizeYM(y, m) {
+  while (m < 0)  { m += 12; y--; }
+  while (m > 11) { m -= 12; y++; }
+  return { y, m };
+}
+
+// ── INIT
+window.addEventListener('load', () => {
+  if (isDark) applyTheme(true);
+  try { notes = JSON.parse(localStorage.getItem('journalNotes') || '{}'); } catch(e) { notes = {}; }
+  rangeStart = normalizeYM(todayY, todayM - 2);
+  rangeEnd   = normalizeYM(todayY, todayM + 3);
+  renderAll();
+  setupInfiniteScroll();
+  requestAnimationFrame(() => setTimeout(scrollToToday, 100));
+
+  // auto-auth if clientId saved
+  if (clientId) {
+    waitForGSI(() => initTokenClient(true));
+  } else {
+    updateAuthBadge();
+  }
+});
+
+function waitForGSI(cb, tries=0) {
+  if (window.google && window.google.accounts) { cb(); return; }
+  if (tries > 30) { updateAuthBadge(); return; }
+  setTimeout(() => waitForGSI(cb, tries + 1), 200);
+}
+
+function initTokenClient(silent) {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: SCOPES,
+    prompt: silent ? '' : 'select_account',
+    callback: (resp) => {
+      if (resp.error) { updateAuthBadge(); return; }
+      accessToken = resp.access_token;
+      updateAuthBadge();
+      showToast('✓ Подключено к Google Drive');
+      // auto-load on first silent auth
+      if (silent) loadFromDrive();
+    }
+  });
+  // try silent first (no popup if already consented)
+  try {
+    tokenClient.requestAccessToken({ prompt: '' });
+  } catch(e) {
+    updateAuthBadge();
+  }
+}
+
+function handleAuthClick() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken, () => {});
+    accessToken = null;
+    updateAuthBadge();
+    showToast('Вышли из аккаунта');
+    return;
+  }
+  if (!clientId) { openModal(); return; }
+  waitForGSI(() => {
+    initTokenClient(false);
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
+  });
+}
+
+function updateAuthBadge() {
+  const b = document.getElementById('authBadge');
+  if (accessToken) {
+    b.textContent = 'Drive: выйти'; b.classList.add('connected'); b.classList.remove('loading');
+  } else {
+    b.textContent = clientId ? 'Drive: войти' : 'Drive: настроить';
+    b.classList.remove('connected', 'loading');
+  }
+}
+
+// ── MODAL
+function openModal() { document.getElementById('clientIdInput').value = clientId; document.getElementById('clientModal').classList.add('show'); }
+function closeModal() { document.getElementById('clientModal').classList.remove('show'); }
+function saveClientId() {
+  const val = document.getElementById('clientIdInput').value.trim();
+  if (!val) { showToast('Введи Client ID'); return; }
+  clientId = val; localStorage.setItem('gClientId', clientId);
+  closeModal();
+  waitForGSI(() => {
+    initTokenClient(false);
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
+  });
+}
+
+// ── SCROLL
+function scrollToToday() {
+  const el = document.getElementById('today-anchor');
+  if (el) el.scrollIntoView({ behavior: 'auto', block: 'center' });
+}
+
+// ── INFINITE SCROLL
+function setupInfiniteScroll() {
+  const obs = new IntersectionObserver(e => { if (e[0].isIntersecting) appendMonths(3); }, { rootMargin: '300px' });
+  obs.observe(document.getElementById('sentinelBottom'));
+  window.addEventListener('scroll', () => { if (window.scrollY < 400) prependMonths(2); }, { passive: true });
+}
+function appendMonths(n) {
+  const cal = document.getElementById('calendar');
+  for (let i = 0; i < n; i++) { rangeEnd = normalizeYM(rangeEnd.y, rangeEnd.m + 1); cal.appendChild(makeMonthFragment(rangeEnd.y, rangeEnd.m)); }
+}
+function prependMonths(n) {
+  const cal = document.getElementById('calendar');
+  const ph = document.body.scrollHeight, ps = window.scrollY;
+  for (let i = 0; i < n; i++) { rangeStart = normalizeYM(rangeStart.y, rangeStart.m - 1); cal.insertBefore(makeMonthFragment(rangeStart.y, rangeStart.m), cal.firstChild); }
+  window.scrollTo(0, ps + document.body.scrollHeight - ph);
+}
+function renderAll() {
+  const cal = document.getElementById('calendar'); cal.innerHTML = '';
+  let cur = { ...rangeStart };
+  while (cur.y < rangeEnd.y || (cur.y === rangeEnd.y && cur.m <= rangeEnd.m)) {
+    cal.appendChild(makeMonthFragment(cur.y, cur.m));
+    cur = normalizeYM(cur.y, cur.m + 1);
+  }
+}
+function makeMonthFragment(y, m) {
+  const frag = document.createDocumentFragment();
+  if (m === 0) {
+    const ym = document.createElement('div'); ym.className = 'year-marker';
+    ym.innerHTML = `<span class="year-number">${y}</span><div class="year-line"></div>`;
+    frag.appendChild(ym);
+  } else {
+    const hr = document.createElement('hr'); hr.className = 'month-divider'; frag.appendChild(hr);
+  }
+  const block = document.createElement('div');
+  block.className = 'month-block'; block.id = `month-${y}-${m}`;
+  block.innerHTML = `<div class="month-name">${MONTHS_RU[m]}</div>`;
+  const days = daysInMonth(y, m);
+  for (let d = 1; d <= days; d += 3) {
+    const wi = Math.floor((d - 1) / 3), wk = `w-${y}-${m}-${wi}`;
+    block.appendChild(makeWeekRow(y, m, wk, [d, d+1, d+2].filter(x => x <= days)));
+  }
+  frag.appendChild(block);
+  return frag;
+}
+function makeWeekRow(y, m, wk, trio) {
+  const row = document.createElement('div'); row.className = 'week-row'; row.id = `row-${wk}`;
+  const isOpen = !!openWeeks[wk];
+  const n1 = (notes[wk]&&notes[wk].n1)||'', n2 = (notes[wk]&&notes[wk].n2)||'';
+  const preview = n1 || n2 || '';
+  const chipsHtml = trio.map(day => {
+    const dk = `${y}-${m}-${day}`, isToday = dk === todayKey, isPast = !isToday && new Date(y,m,day) < today;
+    return `<div class="chip${isToday?' today':isPast?' past':''}"${isToday?' id="today-anchor"':''}>${day}</div>`;
+  }).join('');
+  row.innerHTML = `
+    <div class="week-head">
+      <div class="chips">${chipsHtml}</div>
+      <div class="week-right">
+        <div class="preview${preview?' filled':''}" onclick="toggleWeek('${wk}')">${preview?esc(preview.slice(0,45)):'// ...'}</div>
+        <button class="toggle${isOpen?' open':''}" onclick="toggleWeek('${wk}')" aria-label="Развернуть">▾</button>
+      </div>
+    </div>
+    ${isOpen?expandedHtml(wk,n1,n2):''}`;
+  return row;
+}
+function expandedHtml(wk, n1, n2) {
+  return `<div class="week-body">
+    <textarea class="note-field" placeholder="// поле для текста 1" oninput="onNote('${wk}','n1',this.value)">${esc(n1)}</textarea>
+    <textarea class="note-field" placeholder="// поле для текста 2 — видно только при развороте" oninput="onNote('${wk}','n2',this.value)">${esc(n2)}</textarea>
+  </div>`;
+}
+function toggleWeek(wk) {
+  openWeeks[wk] = !openWeeks[wk];
+  const row = document.getElementById(`row-${wk}`); if (!row) return;
+  const parts = wk.split('-'), y=+parts[1], m=+parts[2], wi=+parts[3], d=wi*3+1, days=daysInMonth(y,m);
+  row.replaceWith(makeWeekRow(y, m, wk, [d,d+1,d+2].filter(x=>x<=days)));
+  if (openWeeks[wk]) setTimeout(()=>{ const el=document.getElementById(`row-${wk}`); if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
+}
+function onNote(wk, field, val) {
+  if (!notes[wk]) notes[wk] = {}; notes[wk][field] = val;
+  localStorage.setItem('journalNotes', JSON.stringify(notes));
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function daysInMonth(y, m) { return new Date(y, m+1, 0).getDate(); }
+
+// ── THEME
+function toggleTheme() { isDark=!isDark; applyTheme(isDark); }
+function applyTheme(dark) { document.body.classList.toggle('dark',dark); document.getElementById('themeBtn').textContent=dark?'☾':'☀'; localStorage.setItem('theme',dark?'dark':'light'); }
+
+// ── TOAST
+let toastTimer;
+function showToast(msg, dur=2500) { clearTimeout(toastTimer); const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); toastTimer=setTimeout(()=>t.classList.remove('show'),dur); }
+function setSyncDot(s) { document.getElementById('syncDot').className='sync-dot'+(s?' '+s:''); }
+
+// ── DRIVE
+async function findFile() {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=name%3D'${FILE_NAME}'%20and%20trashed%3Dfalse&fields=files(id)`, { headers:{Authorization:'Bearer '+accessToken} });
+  if (!r.ok) throw new Error('Drive: '+r.status);
+  const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null;
+}
+async function saveToDrive() {
+  if (!accessToken) { handleAuthClick(); return; }
+  const btn=document.getElementById('saveBtn'); btn.textContent='⏳'; btn.disabled=true; setSyncDot('spin');
+  try {
+    const blob = new Blob([JSON.stringify({notes,savedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+    const id = await findFile(); let res;
+    if (id) {
+      res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, {method:'PATCH',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:blob});
+    } else {
+      const meta=new Blob([JSON.stringify({name:FILE_NAME})],{type:'application/json'}); const form=new FormData(); form.append('metadata',meta); form.append('file',blob);
+      res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});
+    }
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    setSyncDot('ok'); showToast('✓ Сохранено в Google Drive');
+  } catch(e) { setSyncDot('err'); showToast('⚠ '+e.message); }
+  btn.textContent='↑ Сохранить'; btn.disabled=false;
+}
+async function loadFromDrive() {
+  if (!accessToken) return;
+  const btn=document.getElementById('loadBtn'); btn.textContent='⏳'; btn.disabled=true; setSyncDot('spin');
+  try {
+    const id = await findFile();
+    if (!id) { setSyncDot(''); btn.textContent='↓ Загрузить'; btn.disabled=false; return; }
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,{headers:{Authorization:'Bearer '+accessToken}});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json(); notes=data.notes||{};
+    localStorage.setItem('journalNotes',JSON.stringify(notes));
+    setSyncDot('ok'); renderAll(); showToast('✓ Данные загружены');
+    requestAnimationFrame(()=>setTimeout(scrollToToday,80));
+  } catch(e) { setSyncDot('err'); showToast('⚠ '+e.message); }
+  btn.textContent='↓ Загрузить'; btn.disabled=false;
+}
+</script>
+</body>
+</html>
